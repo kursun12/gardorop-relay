@@ -13,21 +13,17 @@ function log(msg) {
   console.log(`[${now}] ${msg}`);
 }
 
-wss.on("connection", (ws, req) => {
+wss.on("connection", (ws) => {
   clients.push(ws);
   log("✅ Client connected");
 
   ws.on("message", (message) => {
     try {
-      // Log and optionally validate JSON
       log(`💬 Message: ${message.toString()}`);
 
-      // Optional: Validate JSON format
-      // const data = JSON.parse(message);
-
-      // Broadcast to all others
+      // Broadcast to ALL connected clients (including sender)
       clients.forEach((client) => {
-        if (client !== ws && client.readyState === WebSocket.OPEN) {
+        if (client.readyState === WebSocket.OPEN) {
           client.send(message);
         }
       });
@@ -47,20 +43,21 @@ wss.on("connection", (ws, req) => {
   });
 });
 
-// Optional health check
+// Optional: Health check route for Render/UptimeRobot
 app.get("/", (req, res) => {
   res.send("🟢 WebSocket Relay Server is running.");
 });
 
-// Optional ping to keep clients alive (esp. on Render)
+// Optional: Keep WebSocket clients alive
 setInterval(() => {
   clients.forEach((ws) => {
     if (ws.readyState === WebSocket.OPEN) {
       ws.ping();
     }
   });
-}, 30000); // every 30 sec
+}, 30000); // every 30 seconds
 
+// Start server
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   log(`🚀 Server listening on port ${PORT}`);
