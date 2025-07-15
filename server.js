@@ -15,7 +15,6 @@ function log(msg) {
   console.log(`[${now}] ${msg}`);
 }
 
-// Heartbeat function
 function heartbeat() {
   this.isAlive = true;
 }
@@ -35,8 +34,6 @@ wss.on("connection", (ws) => {
     log(`📤 Sent last state to client ${ws.id}`);
   }
 
-  let lastElixirForClient = null;
-
   ws.on("message", (message) => {
     let data;
     try {
@@ -48,14 +45,7 @@ wss.on("connection", (ws) => {
 
     const elixir = data.elixir;
 
-    // Only process valid elixir data
     if (typeof elixir === "number" && elixir >= 0 && elixir <= 10) {
-      if (elixir === lastElixirForClient) {
-        // Skip redundant updates
-        return;
-      }
-      lastElixirForClient = elixir;
-
       lastElixirState = {
         type: "elixir_update",
         elixir,
@@ -65,14 +55,13 @@ wss.on("connection", (ws) => {
 
       const payload = JSON.stringify(lastElixirState);
 
-      // Broadcast to all other clients
       clients.forEach((info, client) => {
         if (client !== ws && client.readyState === WebSocket.OPEN) {
           client.send(payload);
         }
       });
 
-      log(`🔄 Broadcasted new elixir ${elixir} from ${ws.id} → ${clients.size - 1} clients`);
+      log(`🔄 Broadcasted elixir ${elixir} from ${ws.id} → ${clients.size - 1} clients`);
     } else {
       log(`⚠️ Ignored invalid elixir data from ${ws.id}: ${JSON.stringify(data)}`);
     }
@@ -88,7 +77,7 @@ wss.on("connection", (ws) => {
   });
 });
 
-// Keep sockets alive
+// Clean up dead sockets
 const interval = setInterval(() => {
   wss.clients.forEach((ws) => {
     if (!ws.isAlive) {
@@ -105,7 +94,6 @@ app.get("/", (req, res) => {
   res.send("🟢 WebSocket Relay Server is running.");
 });
 
-// Graceful shutdown
 process.on("SIGINT", () => {
   log("🔻 Shutting down...");
   clearInterval(interval);
