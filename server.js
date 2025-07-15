@@ -18,19 +18,15 @@ wss.on("connection", (ws) => {
   log("✅ Client connected. Total: " + clients.length);
 
   ws.on("message", (message) => {
-    try {
-      log(`💬 Received: ${message.toString()}`);
+    log(`💬 Received: ${message}`);
 
-      // Broadcast to ALL clients (including sender)
-      clients.forEach((client) => {
-        if (client.readyState === WebSocket.OPEN) {
-          client.send(message);
-          log(`🔄 Sent to client: ${message.toString()}`);
-        }
-      });
-    } catch (err) {
-      log(`⚠️ Error parsing message: ${err.message}`);
-    }
+    // ✅ Send to ALL clients, including the sender
+    clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(message);
+        log(`🔄 Sent to client`);
+      }
+    });
   });
 
   ws.on("close", () => {
@@ -43,12 +39,12 @@ wss.on("connection", (ws) => {
   });
 });
 
-// Optional HTTP health check
+// Optional: health check
 app.get("/", (req, res) => {
-  res.send("🟢 WebSocket Relay Server is up.");
+  res.send("🟢 WebSocket Relay Server is running.");
 });
 
-// Optional: Ping clients every 30 seconds
+// Keep connections alive
 setInterval(() => {
   clients.forEach((ws) => {
     if (ws.readyState === WebSocket.OPEN) {
@@ -60,5 +56,5 @@ setInterval(() => {
 // Start server
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  log(`🚀 WebSocket server running on port ${PORT}`);
+  log(`🚀 Server listening on port ${PORT}`);
 });
