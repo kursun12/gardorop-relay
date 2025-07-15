@@ -1,7 +1,7 @@
 const express = require("express");
 const http = require("http");
 const WebSocket = require("ws");
-const { v4: uuidv4 } = require("uuid"); // for client IDs
+const { v4: uuidv4 } = require("uuid");
 
 const app = express();
 const server = http.createServer(app);
@@ -20,7 +20,6 @@ function heartbeat() {
   this.isAlive = true;
 }
 
-// WebSocket connection
 wss.on("connection", (ws) => {
   ws.id = uuidv4();
   ws.isAlive = true;
@@ -30,15 +29,15 @@ wss.on("connection", (ws) => {
 
   log(`✅ Client connected (ID: ${ws.id}). Total: ${clients.size}`);
 
-  // Optional: replay last elixir state on new connection
+  // Send last known elixir state to new client
   if (lastElixirState) {
     ws.send(JSON.stringify(lastElixirState));
     log(`📤 Sent last state to client ${ws.id}`);
   }
 
-  ws.on("message", (message) => {
-    log(`💬 Received from ${ws.id}: ${message}`);
+  let lastElixirForClient = null;
 
+  ws.on("message", (message) => {
     let data;
     try {
       data = JSON.parse(message);
@@ -47,25 +46,35 @@ wss.on("connection", (ws) => {
       return;
     }
 
-    // Validate elixir update
-    if (typeof data.elixir === "number" && data.elixir >= 0 && data.elixir <= 10) {
+    const elixir = data.elixir;
+
+    // Only process valid elixir data
+    if (typeof elixir === "number" && elixir >= 0 && elixir <= 10) {
+      if (elixir === lastElixirForClient) {
+        // Skip redundant updates
+        return;
+      }
+      lastElixirForClient = elixir;
+
       lastElixirState = {
         type: "elixir_update",
-        elixir: data.elixir,
+        elixir,
         timestamp: Date.now(),
         from: ws.id
       };
 
-      // Broadcast to all clients EXCEPT the sender
+      const payload = JSON.stringify(lastElixirState);
+
+      // Broadcast to all other clients
       clients.forEach((info, client) => {
         if (client !== ws && client.readyState === WebSocket.OPEN) {
-          client.send(JSON.stringify(lastElixirState));
+          client.send(payload);
         }
       });
 
-      log(`🔄 Broadcasted elixir update from ${ws.id} → ${clients.size - 1} clients`);
+      log(`🔄 Broadcasted new elixir ${elixir} from ${ws.id} → ${clients.size - 1} clients`);
     } else {
-      log(`⚠️ Ignored invalid elixir data from ${ws.id}: ${message}`);
+      log(`⚠️ Ignored invalid elixir data from ${ws.id}: ${JSON.stringify(data)}`);
     }
   });
 
@@ -79,20 +88,19 @@ wss.on("connection", (ws) => {
   });
 });
 
-// Clean up dead sockets
+// Keep sockets alive
 const interval = setInterval(() => {
   wss.clients.forEach((ws) => {
     if (!ws.isAlive) {
       log(`⚰️ Terminating dead connection (${ws.id})`);
       return ws.terminate();
     }
-
     ws.isAlive = false;
     ws.ping(() => {});
   });
 }, 30000);
 
-// Health check endpoint
+// Health check
 app.get("/", (req, res) => {
   res.send("🟢 WebSocket Relay Server is running.");
 });
@@ -107,7 +115,6 @@ process.on("SIGINT", () => {
   });
 });
 
-// Start server
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   log(`🚀 Server listening on port ${PORT}`);
